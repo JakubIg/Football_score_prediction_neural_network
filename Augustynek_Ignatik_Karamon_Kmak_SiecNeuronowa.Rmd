@@ -1,0 +1,292 @@
+---
+title: "Przewidywanie wynikow meczow za pomoca sieci neuronowej"
+author: "Jakub Augustynek, Jakub Ignatik, Artur Karamon, Jaroslaw Kmak"
+date: "17 listopada 2018"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+```{r setup, include=FALSE, message=FALSE, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Wstêp
+
+Problem przewidywania rezultatu jakim zakoñczy siê mecz pi³karski  jest doœæ z³o¿ony.  Wp³yw na koñcowy rezultat ma wiele czynników.  Ludzka intuicja podpowiada, i¿ czynniki takie jak obecna forma poszczególnych zawodników, miejsce rozgrywania spotkania przez dan¹ dru¿ynê (na w³asnym stadionie, b¹dŸ na wyjeŸdzie), czy te¿  obecna lokata w lidze maj¹ istotny wp³yw na wynik meczu. Jednak¿e czasem cz³owiek, mimo swojej nieœwiadomoœci , bierze  pod uwagê równie¿ takie aspekty jak upodobanie do danej dru¿yny  b¹dŸ zawodnika/trenera. Jest to zazwyczaj podejœcie b³êdne. W niniejszej pracy do przewidywania koñcowego rozstrzygniêcia spotkania wykorzystane zostan¹ mo¿liwoœci sztucznych sieci neuronowych. Zalet¹ takiego rozwi¹zania s¹ mo¿liwoœci obliczeniowe obecnych komputerów, które wraz z odpowiedni¹ zaimplementowan¹ sieci¹ neuronow¹ s¹ w stanie rozwi¹zywaæ z³o¿one problemy. Podejœcie zaproponowane w pracy bêdzie polegaæ na wprowadzeniu do sieci neuronowej czynników ukazuj¹cych osi¹gniêcia  danego zespo³u w poprzednich meczach, by nastêpnie na podstawie tych danych sieæ wykry³a zale¿noœci ³¹cz¹ce je z koñcowym wynikiem spotkania.  
+**Dane: **Do projektu wykorzystaliœmy dane dla angielskiej Premier League (http://www.football-data.co.uk/englandm.php), a konkretnie sezon 2017/2018. W tym sezonie rozgrywkê prowadzi³o ze sob¹ 20 klubów pi³karskich. Dla ka¿dego starcia miêdzy nimi baza zawiera statystyki meczowe w postaci m.in. strzelonych goli, straconych bramek, liczby rzutów ro¿nych czy te¿ iloœci spalonych.  
+**Biblioteka: **Projekt wykorzystuje bibliotekê "neuralnet", dostêpn¹ w programie R. Pakiet ten umo¿liwia zbudowanie sieci neuronowej i jej uczenie.  
+
+##Model
+
+Model, który ostatecznie wybraliœmy prentuje siê nastêpuj¹co:
+```{r, echo=FALSE}
+"model_ssn<- neuralnet(FTR ~ WinRatioHome + WinRatioAway + PositionHome + PositionAway, datatrain , hidden = c(5,2,2),linear.output = T )"
+```
+
+**Zmienne niezale¿ne: **  
+-WinRatioHome - % wygranych meczy przez gospodarza  
+-WInRatioAway - % wygranych meczy przez goœcia  
+-PositionHome - pozycja gospodarza w rankingu  
+-PositionAway - pozycja goœcia w rankingu  
+**Zmienna zale¿na: **  
+-FTR - wynik meczu (1 - wygrana gospodarza, 0 - remis, -1 - wygrana goœcia)  
+**Ukryte warstwy: **  (5) (2) (2)
+
+Powy¿szy model jest tym, który osi¹gn¹³ najwy¿sz¹ skutecznoœæ ze wszystkich modeli przez nas testowanych (0,5). Próbowaliœmy m.in. jako zmienne niezale¿ne wstawiæ gole zdobyte i stracone w paru ostatnich meczach czy te¿ punkty zespo³u ze strony FIFA.  
+Poni¿ej znajduje siê kod, w którym utworzyliœmy oraz przetestowaliœmy sieæ neuronow¹. W naszym rozwi¹zaniu komputer sam dobiera liczbê neuronów oraz warstw ukrytych, jednak ograniczyliœmy z góry t¹ liczebnoœæ, gdy¿ moc obliczeniowa komputera nie pozwala³a na przetestowanie tego na wy¿szej liczbie warstw i neuronów. Nale¿y jednak zauwa¿yæ, ¿e znaleziona przez nas liczba warstw i neuronów jest dosyæ ma³a, mo¿na wiêc za³o¿yæ, ¿e powiêkszenie zbioru do przeszukania nie poprawi³oby znacz¹co skutecznoœci naszego modelu.  
+```{r pressure, echo=FALSE, warning=FALSE, message=FALSE}
+library(readr)
+library(neuralnet)
+library(dplyr)
+library(nnet)
+library(AER)
+```
+
+```{r, warning=FALSE}
+mecze_PL<-NULL
+mecze<-NULL
+
+#wczytanie bazy danych zawieraj¹cej wyniki meczów wszystkich kolejek Premier League w latach 2017/2018
+mecze_PL <- read.csv("C:/Users/Jan/Desktop/PL_mecze_17_18.csv", header=T)
+
+################################ PRZYGOTOWANIE DANYCH ################################
+mecze_PL<-mecze_PL[,2:10]
+mecze_PL$Date<-rev(mecze_PL$Date)
+mecze_PL$HomeTeam<-rev(mecze_PL$HomeTeam)
+mecze_PL$AwayTeam<-rev(mecze_PL$AwayTeam)
+mecze_PL$FTHG<-rev(mecze_PL$FTHG)
+mecze_PL$FTAG<-rev(mecze_PL$FTAG)
+mecze_PL$FTR<-rev(mecze_PL$FTR)
+mecze_PL$HTHG<-rev(mecze_PL$HTHG)
+mecze_PL$HTAG<-rev(mecze_PL$HTAG)
+mecze_PL$HTR<-rev(mecze_PL$HTR)
+mecze_PL$FTR<-as.numeric(mecze_PL$FTR)
+mecze_PL$FTR[mecze_PL$FTR==1]<--1
+mecze_PL$FTR[mecze_PL$FTR==2]<-0
+mecze_PL$FTR[mecze_PL$FTR==3]<-1
+
+position_df<-data.frame(team=c("Chelsea","Tottenham", "Man City", "Liverpool", "Arsenal", "Man United","Everton","Southampton","Bournemouth","West Brom", "West Ham", "Leicester","Stoke","Crystal Palace", "Swansea", "Burnley", "Watford", "Brighton", "Newcastle","Huddersfield"), position=c(1:17,rep(21,3)))
+
+mecze<-mecze_PL
+mecze_PL2<-mecze_PL
+mecze_PL$WinRatioHome<-rep(0,nrow(mecze_PL))
+mecze_PL$WinRatioAway<-rep(0,nrow(mecze_PL))
+mecze_PL$LostRatioHome<-rep(0,nrow(mecze_PL))
+mecze_PL$LostRatioAway<-rep(0,nrow(mecze_PL))
+zespoly<-unique(mecze_PL$HomeTeam)
+
+for (zespol in zespoly) {
+  
+  #wybór dru¿yny, dla której ma zostaæ utworzona sieæ neuronowa
+  team<-zespol
+  mecze<-mecze_PL2
+  
+  #przekszta³cenie ramki danych tak, aby zawiera³a one jedynie mecze, w których bra³    udzia³ wybrany klub
+  mecze<-mecze[mecze$HomeTeam==team|mecze$AwayTeam==team,]
+  mecze$IsHomeTeam<-rep(0,nrow(mecze))
+  mecze$IsHomeTeam[mecze$HomeTeam==team]<-1
+  mecze$Scored[mecze$HomeTeam==team]<-mecze$FTHG[mecze$HomeTeam==team]
+  mecze$Scored[mecze$HomeTeam!=team]<-mecze$FTAG[mecze$HomeTeam!=team]
+  mecze$Lost[mecze$HomeTeam!=team]<-mecze$FTHG[mecze$HomeTeam!=team]
+  mecze$Lost[mecze$HomeTeam==team]<-mecze$FTAG[mecze$HomeTeam==team]
+  
+  mecze<-mecze[,-c(4:5)]
+  w_Scored<-mecze$Scored
+  w_Lost<-mecze$Lost
+  
+  #dodanie kolumny wyników
+  WL_vector<-sapply(mecze$Scored-mecze$Lost, function(x){
+    if(x>0){res<-1}
+    if(x<0){res<--1}
+    if(x==0){res<-0}
+    res})
+  mecze$Result<-WL_vector
+  w_Result<-mecze$Result
+  mecze<-mecze[-c((length(mecze$Scored)-3):length(mecze$Scored)),]
+  
+  #utworzenie dodatkowych kolumn, reprezentuj¹ych poprzednie mecze
+  mecze$Scored1<-w_Scored[2:(length(w_Scored)-3)]
+  mecze$Lost1<-w_Lost[2:(length(w_Lost)-3)]
+  mecze$Result1<-w_Result[2:(length(w_Result)-3)]
+  
+  mecze$Scored2<-w_Scored[3:(length(w_Scored)-2)]
+  mecze$Lost2<-w_Lost[3:(length(w_Lost)-2)]
+  mecze$Result2<-w_Result[3:(length(w_Result)-2)]
+  
+  mecze$Scored3<-w_Scored[4:(length(w_Scored)-1)]
+  mecze$Lost3<-w_Lost[4:(length(w_Lost)-1)]
+  mecze$Result3<-w_Result[4:(length(w_Result)-1)]
+  
+  mecze$Scored4<-w_Scored[5:(length(w_Scored))]
+  mecze$Lost4<-w_Lost[5:(length(w_Lost))]
+  mecze$Result4<-w_Result[5:(length(w_Result))]
+  
+  mecze$WinRatio<-((mecze$Result1==1)+(mecze$Result2==1)+(mecze$Result3==1)+(mecze$Result4==1))/4
+  mecze$LostRatio<-((mecze$Result1==-1)+(mecze$Result2==-1)+(mecze$Result3==-1)+(mecze$Result4==-1))/4
+  
+  mecze_PL$WinRatioHome[mecze_PL$HomeTeam==zespol][1:length(mecze$WinRatio[mecze$IsHomeTeam==1])]<-mecze$WinRatio[mecze$IsHomeTeam==1]
+  mecze_PL$WinRatioAway[mecze_PL$AwayTeam==zespol][1:length(mecze$WinRatio[mecze$IsHomeTeam==0])]<-mecze$WinRatio[mecze$IsHomeTeam==0]
+  mecze_PL$LostRatioHome[mecze_PL$HomeTeam==zespol][1:length(mecze$LostRatio[mecze$IsHomeTeam==1])]<-mecze$LostRatio[mecze$IsHomeTeam==1]
+  mecze_PL$LostRatioAway[mecze_PL$AwayTeam==zespol][1:length(mecze$LostRatio[mecze$IsHomeTeam==0])]<-mecze$LostRatio[mecze$IsHomeTeam==0]
+  mecze_PL$PositionHome[mecze_PL$HomeTeam==zespol]<-position_df$position[position_df$team==zespol]
+  mecze_PL$PositionAway[mecze_PL$AwayTeam==zespol]<-position_df$position[position_df$team==zespol]
+}
+
+mecze_PL<-mecze_PL[1:(nrow(mecze_PL)-40),]
+mecze<-mecze_PL
+
+#wylosowanie próby zawieraj¹cej indeksy wektora treningowego (70% zbioru)
+set.seed(123)
+dl_w_train <- 0.70 * nrow(mecze)
+index <- sample( seq_len ( nrow ( mecze ) ), size = dl_w_train )
+
+#skalowanie danych
+maxs <- apply(mecze[,c(4:6,10:15)], 2, max) 
+mins <- apply(mecze[,c(4:6,10:15)], 2, min)
+mecze_scaled <- as.data.frame(scale(mecze[,c(4:6,10:15)], center = mins, scale = maxs - mins))
+mecze[,match(colnames(mecze_scaled),colnames(mecze))]<-mecze_scaled
+
+# podzia³ na dane treningowe i testowe
+datatrain <- mecze[ index, ]
+datatest <- mecze[ -index, ]
+
+############################ PREDYKCJA I DOSTOSOWANIE MODELU #########################
+
+#dostêpne dla pêtli liczby neuronów w ka¿dej z (maksymalnie) trzech warstw
+v_1<-4:5
+v_2<-1:2
+v_3<-1:2
+
+acc_max<-0
+
+iter<-0
+for (i1 in v_1) {
+  for (i2 in v_2) {
+    for (i3 in v_3) {
+      iter<-iter+1
+      
+      #dopasowanie modelu sieci neuronowej - model FTR, ostateczny
+      set.seed(123)
+      model_WL<-tryCatch({
+        model_WL<- neuralnet(FTR ~ WinRatioHome + WinRatioAway + PositionHome + PositionAway, datatrain , hidden = c(i1,i2,i3),linear.output = T )
+      }, 
+      error = function(cond){
+        return (model_WL<- neuralnet(FTR ~ WinRatioHome + WinRatioAway + PositionHome + PositionAway, datatrain, linear.output = T )
+        )},
+      warning=function(cond){
+        return (model_WL<- neuralnet(FTR ~ WinRatioHome + WinRatioAway + PositionHome + PositionAway, datatrain,linear.output = T )
+        )},  
+      finally = function(cond){
+        return (model_WL<- neuralnet(FTR ~ WinRatioHome + WinRatioAway + PositionHome + PositionAway, datatrain , linear.output = T )
+        )}
+      )
+      
+      ## predykcja z wykorzystaniem modelu sieci neuronowej - model FTR
+      predict_testWL <- neuralnet::compute(model_WL, datatest[,c(10:11,14:15)])
+      
+      #datatest$FTR
+      predict_rescaled <- predict_testWL$net.result*(max(mecze_PL$FTR)-min(mecze_PL$FTR))+min(mecze_PL$FTR)
+      FTR_rescaled <- (datatest$FTR)*(max(mecze_PL$FTR)-min(mecze_PL$FTR))+min(mecze_PL$FTR)
+
+      predicted_FTR<-as.vector(round(predict_rescaled))
+      conf_matrix_FTR<-table(predicted_FTR ,FTR_rescaled)
+      #dok³adnoœæ predykcji goli strzelonych
+      accuracy_FTR<-sum(diag(conf_matrix_FTR))/sum(conf_matrix_FTR)
+      
+      #wybieranie optymalnej liczby warstw, neuronów oraz skutecznoœci predykcji
+      #obliczanie b³êdu
+      if (accuracy_FTR>acc_max) {
+        acc_max<-accuracy_FTR
+        v_max<-c(i1,i2,i3)
+        MSE.nn <- sum((predict_rescaled - FTR_rescaled)^2)/nrow(datatest)
+      }
+    }
+  }
+}
+print(acc_max)
+print(v_max)
+print(MSE.nn)
+```
+
+##Zmiana liczby neuronów i warstw  
+Ponizej znajduje siê wykres przedstawiaj¹cy celnoœæ predykcji wzglêdem liczby warstw i neuronów. Zrobi³a to funkcja, ale na wykresie przedstawiliœmy czêœæ tego procesu na wykresie.    
+```{r, warning=FALSE, echo=FALSE}
+knitr::include_graphics("slupki.png")
+```
+  
+Jak widaæ, nasza liczba warstw ukrytych i neuronów jest lepsza ni¿ wszystkie pokazane na wykresie.  
+##Zmiana proporcji zbioru ucz¹cego i testowego  
+Poni¿ej znajduje siê wykres, który poka¿e jak zmienia³a siê dok³adnoœæ predykcji wraz ze zmian¹ proporcji zbioru ucz¹cego i testowego.    
+
+```{r, warning=FALSE, echo=FALSE}
+knitr::include_graphics("wykres.png")
+```
+  
+  
+Jak widaæ, dla wielkoœci zbioru ucz¹cego równej 0,7 nie jest osi¹gany najlepszy wynik, mo¿naby go podwy¿szyæ poprzez obni¿enie tej wartoœci do 0,5 lub 0,35, ale wtedy model by³by przeuczony i pojawienie siê nowych danych spowodowa³oby obni¿enie celnoœci predykcji.  
+
+##Funkcja aktywacji
+
+Do analizy dok³adnoœci predykcji wybraliœmy trzy funkcje aktywacji: logistic (u¿yta w projekcie), tanh (hiperboliczna) oraz softplus (x^+).
+```{r, warning=FALSE, echo=FALSE}
+knitr::include_graphics("slupki2.png")
+```
+
+Mo¿na zauwa¿yæ, ¿e dla wybranej przez nas liczby warstw najskuteczniejsz¹ jest zawsze domyœlna funkcja aktywacji, czyli logistyczna. Najgorzej wypada funkcja hiperboliczna, pogarszaj¹c swój wynik z ka¿d¹ now¹ warstw¹.  
+
+##Model ekonometryczny  
+
+Wykonany przez nas model to model logitowy wielomianowy, który przyjmuje 3 wartoœci: 0 (wygrana goœcia), 0,5 (remis) oraz 1 (wygrana gospodarza), zatem podobnie jak przy sieci neuronowej.  
+```{r}
+#utworzenie modelu
+model_Log<-multinom(FTR ~ WinRatioHome + WinRatioAway + PositionHome + PositionAway, datatrain)
+model_Log
+#policzenie skutecznoœci predykcji oraz b³êdu
+predict_Log<-predict(model_Log,datatest[,c(10:11,14:15)])
+conf_matrix_Log<-table(datatest$FTR,predict_Log)
+accuracy_Log<-sum(diag(conf_matrix_Log))/sum(conf_matrix_Log)
+predict_Log<-as.numeric(predict_Log)
+MSE.multinom <- sum((predict_Log - datatest$FTR)^2)/nrow(datatest)
+accuracy_Log      
+MSE.multinom
+```
+  
+Jak wynika z powy¿szego kodu, model posiada skutecznoœæ równ¹ 0.4854368932, czyli niewiele mniejsz¹ ni¿ utworzona przez nas sieæ neuronowa.  
+Kolejnym modelem bêdzie model liniowy, który przyjmuje wartoœci od 0 do 1, gdzie 0 to wygrana goœcia, a 1 to wygrana gospodarza.  
+```{r}
+#utworzenie modelu (wyeliminowana zosta³a zmienna WinRatioHome, gdy¿ nie by³a istotna statystycznie)
+
+modelEkon<-lm(FTR~WinRatioAway+PositionHome+PositionAway,datatrain)
+modelEkon
+
+#policzenie skutecznoœci predykcji
+
+predict_ekon<-predict(modelEkon,datatest[,c(11,14:15)])
+predicted_ekon<-as.vector(round(predict_ekon))
+conf_matrix_ekon<-table(datatest$FTR,predicted_ekon)
+accuracy_ekon<-sum(diag(conf_matrix_ekon))/sum(conf_matrix_ekon)
+MSE.lm <- sum((predict_ekon - datatest$FTR)^2)/nrow(datatest)
+accuracy_ekon
+MSE.lm
+```
+
+Model liniowy ma skutecznoœæ na poziomie 36%, jest wiêc najgorszym z wszystkich przetestowanych modeli, a w dodatku jego interpretacja równie¿ stawia wiele zarzutów. Jako jedyny nie wykorzystuje on sztucznych sieci neuronowych (model wielomianowy logitowy je wykorzystywa³).  
+
+##Podsumowanie 
+
+Nasza sieæ okaza³a siê w przewidywaniu wyników niewiele gorsza od popularnych serwisów bukmacherskich (52%-53%). Trzeba te¿ zwróciæ uwagê na b³¹d œredniokwadratowy, który nie by³ jednak najni¿szy dla sieci neuronowej (0.96) - dla modeli logitowego i liniowego wynosi³ on odpowiednio 3.96 i 0.15, wiêc model liniowy okaza³ siê pod tym wzglêdem lepszy.  
+Nale¿y braæ poprawkê na to, ¿e nasza sieæ przewiduje wy³¹cznie wyniki w Premier League, jednak jest to, naszym zdaniem, wystarczaj¹co wysoki poziom, aby nazwaæ nasz projekt udanym.   
+**Literatura: **  
+Wprowadzenie do tematyki sieci neuronowych. Poznanie zasad funkcjonowania i sposobów wykorzystania:  
+	K. Gurney, An introduction to neural networks, UCL Press, London and New York 1997  
+	D. Kriesel, A Brief Introduction to Neural Networks, Bonn 2005  
+	R. Tadeusiewicz, M. Szaleniec, Leksykon Sieci Neuronowych, Wydawnictwo Fundacji „Projekt Nauka”, Wroc³aw 2015  
+Poznanie wyników innych prac dotycz¹cych poruszanego tematu:   
+	www.andrew.carterlunn.co.uk/programming/2018/02/20/beating-the-bookmakers-with-tensorflow.html?fbclid=IwAR00vVVUwUMDl0fr_aQSvWVuY1-UNHw5K1JCIqSzCh2YC-HBL3WpVP2uUFg  
+Ogólne rozeznanie w temacie sieci neuronowych, poznanie dostêpnych mo¿liwoœci konstrukcji i modyfikacji sieci, tj. funkcje aktywacji:  
+	www.en.wikipedia.org/wiki/Artificial_neural_network  
+	www.doc.ic.ac.uk/~nd/surprise_96/journal/vol4/cs11/report.html  
+Wykorzystanie sieci neuronowych w programie RStudio:  
+	www.r-bloggers.com/fitting-a-neural-network-in-r-neuralnet-package/  
